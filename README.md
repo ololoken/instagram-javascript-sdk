@@ -8,7 +8,7 @@ SDK Usage Examples
 ------------------
     IG.init({
         client_id: YOUR_CLIENT_ID,
-        check_status: true, // check and load active session
+        session: true,
         cookie: true // persist a session via cookie
     });
 
@@ -20,12 +20,11 @@ SDK Usage Examples
     }, {scope: ['comments', 'likes']});
 
     // client side code flow
-    IG.login(function (response) {
-        if (response.code) {
-            // user authorized app, send code to server
-            // for access_token exchange
-        }
-    }, {response_type: 'code', scope: ['comments', 'likes']});
+    IG.login({
+      response_type: 'token', 
+      redirect_uri: path+'igoauthreciever.html',
+      scope: ['basic']
+    });
 
     // get some data
     IG.load('/media/popular', {})
