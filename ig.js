@@ -7,8 +7,9 @@ if (!window.IG) {
         _domain: {
             // https_com: 'http://instagram.local/',
             https_com: 'https://instagram.com/',
-            api: 'http://api.instagram.com/'
+            api: 'https://api.instagram.com/v1/'
         },
+
         getDomain: function (site) {
             switch (site) {
                 case 'https_com':
@@ -58,9 +59,6 @@ if (!window.IG) {
                     window.console.log(message);
                 }
             }
-        },
-        $: function (id) {
-            return document.getElementById(id);
         }
     };
     IG.provide('Array', {
@@ -116,7 +114,7 @@ if (!window.IG) {
             return pairs.join(delimiter);
         },
         decode: function(string) {
-            var pairs = string.split('&'),
+            var pairs = (string || '').split('&'),
                 object = {},
                 i;
 
@@ -128,107 +126,9 @@ if (!window.IG) {
             }
 
             return object;
-        }
-    });
-    IG.provide('Content', {
-        _root: null,
-        _hiddenRoot: null,
-        _callbacks: {},
-        append: function (element_or_html, root) {
-            if (!root) {
-                if (!IG.Content._root) {
-                    IG.Content._root = root = IG.$('ig-root');
-                    if (!root) {
-                        IG.log('The "ig-root" div has not been created.');
-                        return;
-                    }
-                } else {
-                    c = IG.Content._root;
-                }
-            }
-            if (typeof element_or_html === 'string') {
-                var div = document.createElement('div');
-                root.appendChild(div).innerHTML = element_or_html;
-                return div;
-            } else {
-                return root.appendChild(element_or_html);
-            }
         },
-        appendHidden: function (options) {
-            if (!IG.Content._hiddenRoot) {
-                var div = document.createElement('div');
-
-                div.style.position = 'absolute';
-                div.style.top = '-10000px';
-                div.style.width = div.style.height = 0;
-
-                IG.Content._hiddenRoot = IG.Content.append(div);
-            }
-
-            return IG.Content.append(options, IG.Content._hiddenRoot);
-        },
-        insertIframe: function (options) {
-            options.id = options.id || IG.guid();
-            options.name = options.name || IG.guid();
-
-            var callback_guid = IG.guid(),
-                callback_ready = false,
-                callback_fired = false;
-
-            IG.Content._callbacks[callback_guid] = function () {
-                if (callback_ready && !callback_fired) {
-                    callback_fired = true;
-                    if (options.onload) {
-                        options.onload(options.root.firstChild);
-                    }
-                }
-            };
-
-            if (document.attachEvent) {
-                var html = ('<iframe' + ' id="' + options.id + '"' +
-                            ' name="' + options.name + '"' +
-                            (options.title ? ' title="' + options.title + '"' : '') +
-                            (options.className ? ' class="' + options.className + '"' : '') +
-                            ' style="border:none;' + (options.width ? 'width:' + options.width + 'px;' : '') +
-                            (options.height ? 'height:' + options.height + 'px;' : '') + '"' +
-                            ' src="' + options.url + '"' +
-                            ' frameborder="0"' +
-                            ' scrolling="no"' +
-                            ' allowtransparency="true"' +
-                            ' onload="IG.Content._callbacks.' + callback_guid + '()"' + '></iframe>');
-
-                options.root.innerHTML = '<iframe src="javascript:false"' +
-                                         ' frameborder="0"' +
-                                         ' scrolling="no"' +
-                                         ' style="height:1px"></iframe>';
-                callback_ready = true;
-                window.setTimeout(function () {
-                    options.root.innerHTML = html;
-                }, 0);
-            } else {
-                var iframe = document.createElement('iframe');
-                iframe.id = options.id;
-                iframe.name = options.name;
-                iframe.onload = IG.Content._callbacks[callback_guid];
-                iframe.scrolling = 'no';
-                iframe.style.border = 'none';
-                iframe.style.overflow = 'hidden';
-                if (options.title) {
-                    iframe.title = options.title;
-                }
-                if (options.className) {
-                    iframe.className = options.className;
-                }
-                if (options.height) {
-                    iframe.height = options.height;
-                }
-                if (options.width) {
-                    iframe.width = options.width;
-                }
-                options.root.appendChild(iframe);
-                callback_ready = true;
-                iframe.src = options.url;
-            }
+        toObject: function (string) {
+          return string.split('&').map(function (v) {return v.split('=')}).reduce(function (v, cv) {v[cv[0]] = cv[1]; return v}, {});
         }
     });
     IG.provide('JSON', {
@@ -261,10 +161,8 @@ if (!window.IG) {
         }
     });
     IG.provide('EventProvider', {
+        _subscribersMap: {},
         subscribers: function () {
-            if (!this._subscribersMap) {
-                this._subscribersMap = {};
-            }
             return this._subscribersMap;
         },
         subscribe: function (event_name, callback) {
@@ -284,17 +182,6 @@ if (!window.IG) {
                 }
             });
         },
-        monitor: function (event_name, callback) {
-            if (!callback()) {
-                var event_provider = this,
-                    bound_callback = function () {
-                        if (callback.apply(callback, arguments)) {
-                            event_provider.unsubscribe(event_name, bound_callback);
-                        }
-                    };
-                this.subscribe(event_name, bound_callback);
-            }
-        },
         clear: function(event_name) {
             delete this.subscribers()[event_name];
         },
@@ -304,123 +191,16 @@ if (!window.IG) {
 
             IG.log('Fire for: ' + event_name);
             IG.Array.forEach(this.subscribers()[event_name], function (subscriber) {
-                if (subscriber) {
-                    subscriber.apply(this, event_args);
+                if (subscriber instanceof Function) {
+                    subscriber.apply(subscriber, event_args);
                 }
             });
         }
     });
     IG.provide('Event', IG.EventProvider);
-    IG.provide('XD', {
-        _origin: null,
-        _transport: null,
-        _callbacks: {},
-        init: function () {
-            if (IG.XD._origin) {
-                IG.log('XD.init called with "XD._origin" already set. Returning.');
-                return;
-            }
-
-            if (window.addEventListener && !window.attachEvent && window.postMessage) {
-                IG.log('Using "postmessage" as XD transport.');
-                IG.XD._origin = (window.location.protocol + '//' + window.location.host + '/' + IG.guid());
-                IG.XD.PostMessage.init();
-                IG.XD._transport = 'postmessage';
-            } else {
-                IG.log('Using "fragment" as XD transport.');
-                IG.XD._transport = 'fragment';
-                IG.XD.Fragment._channelUrl = window.location.toString();
-            }
-        },
-        resolveRelation: function (relation) {
-            var relation_chain = relation.split('.'),
-                root = window,
-                frame_match,
-                i;
-
-            for (i = 0, num_relations = relation_chain.length; i < num_relations; i++) {
-                child = relation_chain[i];
-                if (child === 'opener' || child === 'parent' || child === 'top') {
-                    root = root[child];
-                } else {
-                    frame_match = /^frames\[['"]?([a-zA-Z0-9-_]+)['"]?\]$/.exec(child);
-                    if (frame_match) {
-                       root = root.frames[frame_match[1]];
-                    } else {
-                        throw new SyntaxError('Malformed relation to resolve: ' + relation + ', pt: ' + child);
-                    }
-                }
-            }
-
-            return root;
-        },
-        handler: function (callback, relation) {
-            if (window.location.toString().indexOf(IG.XD.Fragment._magic) > 0) {
-                return 'javascript:false;//';
-            }
-
-            var proxy_url = IG.getDomain('https_com') + 'oauth/xd_proxy/#',
-                callback_guid = IG.guid();
-
-            if (IG.XD._transport === 'fragment') {
-                proxy_url = IG.XD.Fragment._channelUrl;
-                var hash_index = proxy_url.indexOf('#');
-                if (hash_index > 0) {
-                    proxy_url = proxy_url.substr(0, hash_index);
-                }
-                proxy_url += ((proxy_url.indexOf('?') < 0 ? '?' : '&') + IG.XD.Fragment._magic + '#?=&');
-            }
-
-            IG.XD._callbacks[callback_guid] = callback;
-            return proxy_url + IG.QS.encode({
-                cb: callback_guid,
-                origin: IG.XD._origin,
-                relation: relation || 'opener',
-                transport: IG.XD._transport
-            });
-        },
-        recv: function (data) {
-            if (typeof data === 'string') {
-                data = IG.QS.decode(data);
-            }
-            var callback = IG.XD._callbacks[data.cb];
-            delete IG.XD._callbacks[data.cb];
-            if (callback) {
-                callback(data);
-            }
-        },
-        PostMessage: {
-            init: function () {
-                var handler = IG.XD.PostMessage.onMessage;
-                if (window.addEventListener) {
-                    window.addEventListener('message', handler, false);
-                } else {
-                    window.attachEvent('onmessage', handler);
-                }
-            },
-            onMessage: function (event) {
-                IG.XD.recv(event.data);
-            }
-        },
-        Fragment: {
-            _magic: 'ig_xd_fragment',
-            checkAndDispatch: function () {
-                var url = window.location.toString(),
-                    fragment = url.substr(url.indexOf('#') + 1),
-                    magic_pos = url.indexOf(IG.XD.Fragment._magic);
-
-                if (magic_pos > 0) {
-                    IG.init = function() {};
-                    document.documentElement.style.display = 'none';
-                    IG.XD.resolveRelation(IG.QS.decode(fragment).relation).IG.XD.recv(fragment);
-                }
-            }
-        }
-    });
-    IG.XD.Fragment.checkAndDispatch();
     IG.provide('', {
-        ui: function (options, callback) {
-            var prepared_options = IG.UIServer.prepareCall(options, callback);
+        ui: function (options) {
+            var prepared_options = IG.UIServer.prepareCall(options);
             if (!prepared_options) {
                 IG.log('"prepareCall" failed to return options');
                 return;
@@ -429,7 +209,7 @@ if (!window.IG) {
             var display = prepared_options.params.display;
             var display_method = IG.UIServer[display];
             if (!display_method) {
-                IG.log('"display" must be "popup"');
+                IG.log('"display" must be');
                 return;
             }
 
@@ -440,7 +220,7 @@ if (!window.IG) {
         Methods: {},
         _active: {},
         _defaultCb: {},
-        prepareCall: function (options, callback) {
+        prepareCall: function (options) {
             var method_name = options.method.toLowerCase(),
                 method = IG.UIServer.Methods[method_name],
                 popup_id = IG.guid();
@@ -453,7 +233,6 @@ if (!window.IG) {
             options.display = IG.UIServer.getDisplayMode(method, options);
 
             var prepared_options = {
-                callback: callback,
                 id: popup_id,
                 size: method.size || {},
                 url: method.url,
@@ -468,16 +247,16 @@ if (!window.IG) {
                 }
             }
 
-            var relation = IG.UIServer.getXdRelation(prepared_options.params.display);
-
-            prepared_options.params.redirect_uri = IG.UIServer._xdResult(prepared_options.callback, prepared_options.id, relation, true);
+            prepared_options.params.redirect_uri = options.redirect_uri;
 
             prepared_options.params = IG.JSON.flatten(prepared_options.params);
+            var display = prepared_options.params.display;
+            delete prepared_options.params.display;
             var query_string = IG.QS.encode(prepared_options.params);
             if (query_string) {
                 prepared_options.url += '?' + query_string;
             }
-
+            prepared_options.params.display = display;
             return prepared_options;
         },
         getDisplayMode: function (method, options) {
@@ -485,11 +264,6 @@ if (!window.IG) {
                 return 'hidden';
             }
             return  'popup';
-        },
-        getXdRelation: function (display) {
-            if (display === 'popup') {
-                return 'opener';
-            }
         },
         popup: function (options) {
             var screenX = typeof window.screenX !== 'undefined' ? window.screenX : window.screenLeft,
@@ -504,102 +278,47 @@ if (!window.IG) {
                 popupFeatures = ('width=' + popupWidth + ',height=' + popupHeight + ',left=' + popupX + ',top=' + popupY + ',scrollbars=1,location=1,toolbar=0');
             IG.log('opening popup: ' + options.id);
             IG.UIServer._active[options.id] = window.open(options.url, options.id, popupFeatures);
-        },
-        hidden: function (options) {
-            options.className = 'IG_UI_Hidden';
-            options.root = IG.Content.appendHidden('');
-            IG.UIServer._insertIframe(options);
-        },
-        _insertIframe: function (options) {
-            IG.UIServer._active[options.id] = false;
-
-            var set_callback = function (callback) {
-                if (IG.UIServer._active.hasOwnProperty(options.id)) {
-                    IG.UIServer._active[options.id] = callback;
-                }
-            };
-
-            IG.Content.insertIframe({
-                url: options.url,
-                root: options.root,
-                className: options.className,
-                width: options.size.width,
-                height: options.size.height,
-                onload: set_callback
-            });
-        },
-        _xdRedirectUriHandler: function (callback, guid, relation, set_default) {
-            if (set_default) {
-                IG.UIServer._defaultCb[guid] = callback;
-            }
-            return IG.XD.handler(function (response) {
-                IG.UIServer._xdRecv(response, callback);
-            }, relation) + '&frame=' + guid;
-        },
-        _xdRecv: function (response, callback) {
-            var win = IG.UIServer._active[response.frame];
-            try {
-                if (win.close) {
-                    win.close();
-                }
-            } catch (e) {}
-            delete IG.UIServer._active[response.frame];
-            delete IG.UIServer._defaultCb[response.frame];
-            callback(response);
-        },
-        _xdResult: function (callback, guid, relation, set_default) {
-            return (IG.UIServer._xdRedirectUriHandler(function (response) {
-                if (callback) {
-                    if (response.result) {
-                        callback(IG.JSON.parse(response.result));
-                    }
-                }
-            }, guid, relation, set_default));
         }
     });
     IG.provide('', {
-        getLoginStatus: function (callback, force_recheck) {
-            if (!IG._client_id) {
-                IG.log('IG.getLoginStatus() called before calling IG.init().');
-                return;
-            }
-
-            if (callback) {
-                if (!force_recheck && IG.Auth._loadState === 'loaded') {
-                    callback({
-                        status: IG._userStatus,
-                        session: IG._session
-                    });
-                    return;
-                } else {
-                    IG.Event.subscribe('IG.loginStatus', callback);
-                }
-            }
-
-            if (!force_recheck && IG.Auth._loadState === 'loading') {
-                return;
-            }
-
-            IG.Auth._loadState = 'loading';
-
-            var internal_callback = function (response) {
-                IG.Auth._loadState = 'loaded';
-                IG.Event.fire('IG.loginStatus', response);
-                IG.Event.clear('IG.loginStatus');
-            };
-            IG.ui({
-                method: 'auth.status',
-                display: 'hidden'
-            }, internal_callback);
+        login: function (options) {
+            IG.Auth.setSession(IG.Cookie.load());
+            IG.load('/users/self').then(function () {}).catch(function (e) {
+              IG.ui(IG.copy({
+                  'display': 'popup',
+                  'method': 'authorize'
+              }, options || {}))
+            });
         },
-        login: function (callback, options) {
-            IG.ui(IG.copy({
-                display: 'popup',
-                method: 'authorize'
-            }, options || {}), callback);
-        },
-        logout: function (callback) {
+        logout: function () {
             IG.Auth.setSession();
+        },
+        load: function (url, params) {
+          return new Promise(function (resolve, reject) {
+            var script = document.createElement('script');
+            var callbackName = 'igcb_'+Math.round(Math.random()*1000000+1000000);
+            params = IG.copy({
+              'access_token': IG._session.access_token,
+              'callback': callbackName
+            }, params || {});
+            script.setAttribute('src', IG.getDomain('api')+url+'?'+IG.QS.encode(params));
+
+            window[callbackName] = function (data) {
+              this.resolved = true;
+              resolve(data);
+            }.bind(this);
+            script.addEventListener('load', function () {
+              script.parentNode.removeChild(script);
+              delete window[callbackName];
+            }.bind(this));
+            script.addEventListener('error', function (e) {
+              script.parentNode.removeChild(script);
+              delete window[callbackName];
+              reject(e);
+            }.bind(this));
+
+            document.head.appendChild(script);
+          });
         }
     });
     IG.provide('Auth', {
@@ -615,7 +334,7 @@ if (!window.IG) {
             IG._userStatus = status;
 
             if (session_changed && IG.Cookie.getEnabled()) {
-                IG.Cookie.set(session);
+                IG.Cookie.set(session, Date.now()+24*3600*1000);
             }
 
             if (status_changed) {
@@ -633,36 +352,6 @@ if (!window.IG) {
             if (session_changed) {
                 IG.Event.fire('auth.sessionChange', session_wrapper);
             }
-
-            return session_wrapper;
-        },
-        xdHandler: function (callback, guid, relation, set_default, user_status, session_object) {
-            return IG.UIServer._xdRedirectUriHandler(IG.Auth.xdResponseWrapper(callback, user_status, session_object), guid, relation, set_default);
-        },
-        xdResponseWrapper: function (callback, user_status, session_object) {
-            return function (response) {
-                try {
-                    session_object = IG.JSON.parse(response.session || null);
-                    session_object.scope = IG.JSON.parse(response.scope || null);
-                } catch (e) {}
-
-                if (session_object) {
-                    user_status = 'connected';
-                }
-
-                var session = IG.Auth.setSession(session_object || null, user_status),
-                    additional_vars = ['code', 'error', 'error_reason', 'error_description'];
-
-                if (response) {
-                    IG.Array.forEach(additional_vars, function (var_name) {
-                        session[var_name] = response[var_name] || null;
-                    });
-                }
-
-                if (callback) {
-                    callback(session);
-                }
-            };
         }
     });
     IG.provide('UIServer.Methods', {
@@ -678,51 +367,12 @@ if (!window.IG) {
                     return;
                 }
 
-                if (IG._session) {
-                    var needs_authorization = false;
-                    IG.Array.forEach(options.params.scope, function (required_scope) {
-                        if (IG._session.scope.indexOf(required_scope) === -1) {
-                            needs_authorization = true;
-                        }
-                    });
-
-                    if (!needs_authorization) {
-                        IG.log('IG.login() called when user is already connected.');
-                        if (options.callback) {
-                            options.callback({
-                                status: IG._userStatus,
-                                session: IG._session
-                            });
-                            return;
-                        }
-                    }
-                }
-
-                options.callback = IG.Auth.xdResponseWrapper(options.callback);
-
                 if (options.params.scope) {
-                    options.params.scope = options.params.scope.join(' ');
+                    options.params.scope = options.params.scope.join('+');
                 }
 
                 IG.copy(options.params, {
-                    response_type: "token"
-                });
-
-                return options;
-            }
-        },
-        'auth.status': {
-            url: IG.getDomain('https_com') + 'oauth/login_status/',
-            transform: function (options) {
-                var callback = options.callback,
-                    id = options.id;
-
-                delete options.callback;
-
-                IG.copy(options.params, {
-                    no_session: IG.Auth.xdHandler(callback, options.id, 'parent', false, 'notConnected'),
-                    no_user: IG.Auth.xdHandler(callback, options.id, 'parent', false, 'unknown'),
-                    ok_session: IG.Auth.xdHandler(callback, options.id, 'parent', false, 'connected')
+                    response_type: 'token'
                 });
 
                 return options;
@@ -739,21 +389,22 @@ if (!window.IG) {
             return IG.Cookie._enabled;
         },
         load: function () {
-            var cookie_match = document.cookie.match('\\bigs_' + IG._client_id + '="([^;]*)\\b'),
-                value;
+            var
+              cookies = document.cookie
+                .split('; ')
+                .map(function (v) {return v.split(/^([^=]+)=\"(.+)\"$/)})
+                .reduce(function (v, cv) {v[cv[1]] = IG.QS.decode(cv[2]); return v}, {});
 
-            if (cookie_match) {
-                value= IG.QS.decode(cookie_match[1]);
-                if (value.expires) {
-                    value.expires = parseInt(value.expires, 10);
-                }
-                IG.Cookie._domain = value.base_domain;
-            }
-
+            var value = null;
+              if ('igs_'+IG._client_id in cookies) {
+                value = cookies['igs_'+IG._client_id];
+              }
             return value;
         },
         setRaw: function (value, timestamp, domain) {
-            document.cookie = 'igs_' + IG._client_id + '="' + value + '"' + (value && timestamp === 0 ? '' : '; expires=' + new Date(timestamp * 1000).toGMTString()) + '; path=/' + (domain ? '; domain=.' + domain : '');
+            document.cookie = ['igs_', IG._client_id, '="', value, '"',
+              (value && timestamp === 0 ? '' : '; expires='+new Date(timestamp).toGMTString()), '; path=/',
+              (domain ? '; domain=.' + domain : '')].join('');
             IG.Cookie._domain = domain;
         },
         set: function (value) {
@@ -770,30 +421,23 @@ if (!window.IG) {
     IG.provide('', {
         init: function (settings) {
             settings = IG.copy(settings || {}, {
-                logging: false,
-                check_status: true
+                logging: false
             });
 
             IG._client_id = settings.client_id;
             IG._logging = settings.logging || (typeof settings.logging === 'undefined' && window.location.toString().indexOf('ig_debug=1') > 0);
 
-            IG.XD.init();
-
             if (IG._client_id) {
                 IG.Cookie.setEnabled(settings.cookie);
-
-                settings.session = settings.session || (settings.cookie && IG.Cookie.load());
-                IG.Auth.setSession(settings.session);
-                if (settings.check_status) {
-                    IG.getLoginStatus();
-                }
             }
         }
     });
-    window.setTimeout(function(){
-        if (window.igAsyncInit && !window.igAsyncInit.hasRun) {
-            window.igAsyncInit.hasRun = true;
-            igAsyncInit();
-        }
-    }, 0);
+}
+
+if (window.location.hash) {
+  var session = IG.QS.toObject(window.location.hash.replace('#', ''));
+    if ('access_token' in session) {
+      window.opener.IG.Auth.setSession(session);
+      window.close();
+    }
 }

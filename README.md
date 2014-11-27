@@ -2,20 +2,7 @@ The Instagram JavaScript SDK
 ============================
 A JavaScript library for the Instagram REST and Search APIs
 (currently supports authentication, authorization and persisting sessions)
-
-Take a look at the [Instadrop](https://github.com/Instagram/Instadrop) project for an implementation example.
-
-
-Follow @instagramapi on Twitter
-----------------------------
-You should [follow @instagramapi on Twitter](http://twitter.com/#!/instagramapi) for announcements,
-updates, and news about the Instagram API.
-
-
-Join the mailing list!
-----------------------
-<https://groups.google.com/group/instagram-api-developers>
-
+Forked from facebookarchive/instagram-javascript-sdk
 
 SDK Usage Examples
 ------------------
@@ -39,6 +26,11 @@ SDK Usage Examples
             // for access_token exchange
         }
     }, {response_type: 'code', scope: ['comments', 'likes']});
+
+    // get some data
+    IG.load('/media/popular', {})
+    	.then(function (response) {  })
+    	.catch(function (responseFailed) {  });
 
 Contributing
 ------------
@@ -77,7 +69,3 @@ Submitting a Pull Request
 6. Submit a pull request.
 
 
-Copyright
----------
-Copyright (c) 2011 Instagram (Burbn, Inc).
-See [LICENSE](https://github.com/Instagram/instagram-javascript-sdk/blob/master/LICENSE.md) for details.
