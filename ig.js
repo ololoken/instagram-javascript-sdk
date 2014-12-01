@@ -212,7 +212,6 @@ if (!window.IG) {
                 IG.log('"display" must be');
                 return;
             }
-
             display_method(prepared_options);
         }
     });
@@ -283,7 +282,7 @@ if (!window.IG) {
     IG.provide('', {
         login: function (options) {
             IG.Auth.setSession(IG.Cookie.load());
-            IG.load('/users/self').then(function () {}).catch(function (e) {
+            return IG.load('/users/self').catch(function (e) {
               IG.ui(IG.copy({
                   'display': 'popup',
                   'method': 'authorize'
